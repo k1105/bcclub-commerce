@@ -4,6 +4,9 @@ import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 // glTF形式の場合。OBJ等の場合は該当Loaderを使う
 import { GLTFLoader } from "three-stdlib";
+import DraggableCircle from "@/components/DraggableCircle";
+
+import { YouTubeEmbed } from "@next/third-parties/google";
 
 export default function HomePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,7 +80,7 @@ export default function HomePage() {
     let moveBackward = false;
     let rotateLeft = false;
     let rotateRight = false;
-    const moveSpeed = 0.05;
+    const moveSpeed = 0.2;
     const rotateSpeed = 0.03; // 左右回転の角速度(お好みで調整)
 
     // --------------------------------------
@@ -249,14 +252,31 @@ export default function HomePage() {
             animation: "fadein 0.5s",
           }}
         >
-          <div
-            style={{ background: "#fff", padding: "2rem", borderRadius: "8px" }}
-          >
-            <h2>円柱と衝突しました！</h2>
-            <button onClick={() => setShowModal(false)}>閉じる</button>
+          <div>
+            <div style={{ width: "600px" }}>
+              <YouTubeEmbed videoid="k2i73lmL3CM" />
+            </div>
+            <button
+              style={{ marginTop: "1rem" }}
+              onClick={() => setShowModal(false)}
+            >
+              閉じる
+            </button>
           </div>
         </div>
       )}
+      <div
+        style={{
+          height: "100vh",
+          width: "100vw",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          pointerEvents: "none",
+        }}
+      >
+        <DraggableCircle />
+      </div>
 
       {/* フェードイン用CSSアニメーション */}
       <style jsx global>{`
