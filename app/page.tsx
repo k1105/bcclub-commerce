@@ -49,6 +49,7 @@ export default function HomePage() {
 
       // 円柱（Columnという名前を想定）に対してボックスコライダを作成
       gltf.scene.traverse((child) => {
+        console.log(child);
         if (child.name.includes("Column") && child instanceof THREE.Mesh) {
           const colBox = new THREE.Box3().setFromObject(child);
           columnColliders.push({ mesh: child, box: colBox });
@@ -59,7 +60,7 @@ export default function HomePage() {
     // --------------------------------------
     // 2. プレイヤー（立方体）を配置
     // --------------------------------------
-    const playerSize = 0.5;
+    const playerSize = 1;
     const playerGeometry = new THREE.BoxGeometry(
       playerSize,
       playerSize,
@@ -68,7 +69,7 @@ export default function HomePage() {
     const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff88 });
     const player = new THREE.Mesh(playerGeometry, playerMaterial);
     // 床(y=0)上に置く
-    player.position.set(0, playerSize / 2, 0);
+    player.position.set(0, playerSize / 2 + 1, 25);
     scene.add(player);
 
     // プレイヤー移動用のフラグ＆速度
@@ -174,9 +175,26 @@ export default function HomePage() {
 
       // 円柱との衝突判定（Box3）
       playerBox.setFromObject(player);
+
+      // すべての円柱をチェック
       for (const col of columnColliders) {
-        col.box.setFromObject(col.mesh);
-        if (playerBox.intersectsBox(col.box)) {
+        // (1) Mesh型か確認し、それ以外はスキップ
+        if (!(col.mesh instanceof THREE.Mesh)) continue;
+
+        // (2) Mesh型として扱う
+        const mesh = col.mesh as THREE.Mesh;
+
+        // (3) バウンディングボックスが未計算なら計算
+        if (!mesh.geometry.boundingBox) {
+          mesh.geometry.computeBoundingBox();
+        }
+
+        // (4) バウンディングボックスをワールド座標に適用
+        const bbox = mesh.geometry.boundingBox!.clone();
+        bbox.applyMatrix4(mesh.matrixWorld);
+
+        // (5) 衝突判定
+        if (playerBox.intersectsBox(bbox)) {
           setShowModal(true);
           break;
         }
