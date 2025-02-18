@@ -2,20 +2,29 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-// glTF形式の場合。OBJ等の場合は該当Loaderを使う
 import { GLTFLoader } from "three-stdlib";
 import DraggableCircle from "@/components/DraggableCircle";
-
-import { YouTubeEmbed } from "@next/third-parties/google";
+import Modal from "@/components/Modal";
 
 export default function HomePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // モーダルの表示状態
+  // ----------- モーダル用React State -----------
   const [showModal, setShowModal] = useState(false);
 
+  // =============================================
+  //  デスクトップ/スマホ共通でドラッグを扱うための参照・状態
+  // =============================================
+  // ドラッグ中かどうか
+  const isDraggingRef = useRef(false);
+  // ドラッグ開始座標（マウスダウン/タッチ開始したときの座標）
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  // =============================================
+  //  Three.js初期化はマウント時に一度だけ実行
+  // =============================================
   useEffect(() => {
-    // シーンとカメラ、レンダラーを準備
+    // ---------- シーン, カメラ, レンダラー ----------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xa0a0a0);
 
@@ -25,7 +34,6 @@ export default function HomePage() {
       0.1,
       1000
     );
-    // カメラの初期位置。後ほど毎フレーム更新するので初期化だけ
     camera.position.set(0, 2, 5);
 
     const renderer = new THREE.WebGLRenderer({
@@ -35,24 +43,20 @@ export default function HomePage() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // ライトを配置
+    // ---------- ライト ----------
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(10, 10, 10);
     scene.add(dirLight);
 
-    // --------------------------------------
-    // 1. Blenderから書き出したモデルを読み込み (床＆円柱群)
-    // --------------------------------------
+    // ---------- モデル読み込み (Blender出力) ----------
     const loader = new GLTFLoader();
-    // models/myCircularStage.gltf のパスは適宜差し替えてください
+    const columnColliders: { mesh: THREE.Object3D; box: THREE.Box3 }[] = [];
+
     loader.load("/models/dummy_model.glb", (gltf) => {
       scene.add(gltf.scene);
-
-      // 円柱（Columnという名前を想定）に対してボックスコライダを作成
       gltf.scene.traverse((child) => {
-        console.log(child);
         if (child.name.includes("Column") && child instanceof THREE.Mesh) {
           const colBox = new THREE.Box3().setFromObject(child);
           columnColliders.push({ mesh: child, box: colBox });
@@ -60,9 +64,7 @@ export default function HomePage() {
       });
     });
 
-    // --------------------------------------
-    // 2. プレイヤー（立方体）を配置
-    // --------------------------------------
+    // ---------- プレイヤー ----------
     const playerSize = 1;
     const playerGeometry = new THREE.BoxGeometry(
       playerSize,
@@ -71,27 +73,18 @@ export default function HomePage() {
     );
     const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff88 });
     const player = new THREE.Mesh(playerGeometry, playerMaterial);
-    // 床(y=0)上に置く
-    player.position.set(0, playerSize / 2 + 1, 25);
+    player.position.set(0, playerSize / 2 + 1, 25); // 床よりちょっと上
     scene.add(player);
 
-    // プレイヤー移動用のフラグ＆速度
+    // ---------- 移動や回転に使うフラグ ----------
     let moveForward = false;
     let moveBackward = false;
     let rotateLeft = false;
     let rotateRight = false;
     const moveSpeed = 0.2;
-    const rotateSpeed = 0.03; // 左右回転の角速度(お好みで調整)
+    const rotateSpeed = 0.03;
 
-    // --------------------------------------
-    // 3. 円柱との衝突判定 (Box3を使う簡易実装)
-    // --------------------------------------
-    const playerBox = new THREE.Box3();
-    const columnColliders: { mesh: THREE.Object3D; box: THREE.Box3 }[] = [];
-
-    // --------------------------------------
-    // 4. キーボード入力(WASD)
-    // --------------------------------------
+    // ---------- キーボード操作 (WASD) ----------
     const onKeyDown = (event: KeyboardEvent) => {
       switch (event.code) {
         case "KeyW":
@@ -108,7 +101,6 @@ export default function HomePage() {
           break;
       }
     };
-
     const onKeyUp = (event: KeyboardEvent) => {
       switch (event.code) {
         case "KeyW":
@@ -125,25 +117,73 @@ export default function HomePage() {
           break;
       }
     };
-
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
-    // --------------------------------------
-    // カメラ追従用のオフセットを定義
-    // （立方体の少し上＆後ろから見る）
-    // --------------------------------------
+    // =============================================
+    //   ポインターイベント (マウス/タッチ共通)
+    // =============================================
+    const onPointerDown = (e: PointerEvent) => {
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+
+      // ドラッグ開始からの移動差分
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+
+      // 左右回転
+      if (dx > 0) {
+        rotateLeft = true;
+        rotateRight = false;
+      } else if (dx < 0) {
+        rotateRight = true;
+        rotateLeft = false;
+      } else {
+        // 左右に動いていない場合は回転なし
+        rotateLeft = false;
+        rotateRight = false;
+      }
+
+      // 前後移動
+      if (dy > 0) {
+        moveForward = true;
+        moveBackward = false;
+      } else if (dy < 0) {
+        moveBackward = true;
+        moveForward = false;
+      } else {
+        // 前後に動いていない場合は移動なし
+        moveForward = false;
+        moveBackward = false;
+      }
+    };
+
+    const onPointerUp = () => {
+      isDraggingRef.current = false;
+      // ドラッグ終了したので移動/回転フラグはリセット
+      moveForward = false;
+      moveBackward = false;
+      rotateLeft = false;
+      rotateRight = false;
+    };
+
+    // ドキュメント全体にリスナーを登録
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+
+    // ---------- アニメーションループ ----------
+    const playerBox = new THREE.Box3();
     const cameraOffset = new THREE.Vector3(0, 2, 5);
 
     const animate = () => {
       requestAnimationFrame(animate);
 
-      // ********** ここを修正 **********
-      // 左右移動 (player.position.x +=) を削除し、
-      // A,Dキー時はプレイヤーのY回転に反映
-      // また、W,S前後移動は「プレイヤーが向いている方向」に合わせる
-
-      // 1) 左右回転
+      // 回転
       if (rotateLeft) {
         player.rotation.y += rotateSpeed;
       }
@@ -151,8 +191,7 @@ export default function HomePage() {
         player.rotation.y -= rotateSpeed;
       }
 
-      // 2) 前後移動
-      //    立方体のローカルZ軸（Zマイナスが前）に沿って移動する
+      // 前後
       if (moveForward) {
         const forwardDir = new THREE.Vector3(0, 0, -1);
         forwardDir.applyAxisAngle(
@@ -170,101 +209,60 @@ export default function HomePage() {
         player.position.addScaledVector(backwardDir, moveSpeed);
       }
 
-      // --- 以下、床の高さ制限や衝突判定、カメラ追従などはそのまま ---
-      // 「床より下にいかないようにする」
+      // 床より下に行かない
       if (player.position.y < playerSize / 2) {
         player.position.y = playerSize / 2;
       }
 
-      // 円柱との衝突判定（Box3）
+      // 円柱との衝突判定
       playerBox.setFromObject(player);
-
-      // すべての円柱をチェック
       for (const col of columnColliders) {
-        // (1) Mesh型か確認し、それ以外はスキップ
         if (!(col.mesh instanceof THREE.Mesh)) continue;
-
-        // (2) Mesh型として扱う
         const mesh = col.mesh as THREE.Mesh;
-
-        // (3) バウンディングボックスが未計算なら計算
         if (!mesh.geometry.boundingBox) {
           mesh.geometry.computeBoundingBox();
         }
-
-        // (4) バウンディングボックスをワールド座標に適用
         const bbox = mesh.geometry.boundingBox!.clone();
         bbox.applyMatrix4(mesh.matrixWorld);
 
-        // (5) 衝突判定
         if (playerBox.intersectsBox(bbox)) {
           setShowModal(true);
           break;
         }
       }
 
-      // 1. cameraOffset(0,2,5)をプレイヤーのrotation.yに応じて回転させる
+      // カメラ追従
       const offsetRotated = cameraOffset.clone();
       offsetRotated.applyAxisAngle(
         new THREE.Vector3(0, 1, 0),
         player.rotation.y
       );
-
-      // 2. プレイヤー位置 + 回転後オフセット でカメラ位置を設定
       camera.position.set(
         player.position.x + offsetRotated.x,
         player.position.y + offsetRotated.y,
         player.position.z + offsetRotated.z
       );
-
-      // 3. カメラがプレイヤーを常に見る
       camera.lookAt(player.position);
 
-      // 描画
       renderer.render(scene, camera);
     };
     animate();
 
-    // コンポーネントアンマウント時のクリーンアップ
+    // ---------- クリーンアップ ----------
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
       renderer.dispose();
     };
-  }, []);
+  }, []); // ← ★依存配列は空★ (マウント時のみ実行)
 
   return (
     <>
       <canvas ref={canvasRef} style={{ display: "block" }} />
-      {/* 衝突検知でモーダルを表示 */}
-      {showModal && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            animation: "fadein 0.5s",
-          }}
-        >
-          <div>
-            <div style={{ width: "600px" }}>
-              <YouTubeEmbed videoid="k2i73lmL3CM" />
-            </div>
-            <button
-              style={{ marginTop: "1rem" }}
-              onClick={() => setShowModal(false)}
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      )}
+      {showModal && <Modal onClick={() => setShowModal(false)} />}
       <div
         style={{
           height: "100vh",
@@ -277,18 +275,6 @@ export default function HomePage() {
       >
         <DraggableCircle />
       </div>
-
-      {/* フェードイン用CSSアニメーション */}
-      <style jsx global>{`
-        @keyframes fadein {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-      `}</style>
     </>
   );
 }
