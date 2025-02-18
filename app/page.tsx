@@ -124,11 +124,13 @@ export default function HomePage() {
     //   ポインターイベント (マウス/タッチ共通)
     // =============================================
     const onPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
       isDraggingRef.current = true;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
       if (!isDraggingRef.current) return;
 
       // ドラッグ開始からの移動差分
@@ -162,7 +164,8 @@ export default function HomePage() {
       }
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (e: PointerEvent) => {
+      e.preventDefault();
       isDraggingRef.current = false;
       // ドラッグ終了したので移動/回転フラグはリセット
       moveForward = false;
@@ -172,9 +175,9 @@ export default function HomePage() {
     };
 
     // ドキュメント全体にリスナーを登録
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointerdown", onPointerDown, { passive: false });
+    document.addEventListener("pointermove", onPointerMove, { passive: false });
+    document.addEventListener("pointerup", onPointerUp, { passive: false });
 
     // ---------- アニメーションループ ----------
     const playerBox = new THREE.Box3();
@@ -261,8 +264,15 @@ export default function HomePage() {
 
   return (
     <>
-      <canvas ref={canvasRef} style={{ display: "block" }} />
-      {showModal && <Modal onClick={() => setShowModal(false)} />}
+      <canvas
+        ref={canvasRef}
+        style={{ display: "block", touchAction: "none" }}
+      />
+      <div
+        style={{ opacity: showModal ? 1 : 0, transition: "opacity 300ms ease" }}
+      >
+        <Modal onClick={() => setShowModal(false)} />
+      </div>
       <div
         style={{
           height: "100vh",
