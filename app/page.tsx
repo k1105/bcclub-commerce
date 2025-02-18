@@ -219,6 +219,7 @@ export default function HomePage() {
 
       // 円柱との衝突判定
       playerBox.setFromObject(player);
+      let isIntersect = false;
       for (const col of columnColliders) {
         if (!(col.mesh instanceof THREE.Mesh)) continue;
         const mesh = col.mesh as THREE.Mesh;
@@ -230,8 +231,13 @@ export default function HomePage() {
 
         if (playerBox.intersectsBox(bbox)) {
           setShowModal(true);
+          isIntersect = true;
           break;
         }
+      }
+
+      if (!isIntersect) {
+        setShowModal(false);
       }
 
       // カメラ追従
