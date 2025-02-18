@@ -23,7 +23,7 @@ const Modal = ({
         }}
       >
         <div>
-          <div style={{ width: "600px" }}>
+          <div style={{ width: "600px", maxWidth: "100vw" }}>
             <YouTubeEmbed videoid="k2i73lmL3CM" />
           </div>
           <button style={{ marginTop: "1rem" }} onClick={onClick}>
