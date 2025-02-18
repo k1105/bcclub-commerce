@@ -269,9 +269,17 @@ export default function HomePage() {
         style={{ display: "block", touchAction: "none" }}
       />
       <div
-        style={{ opacity: showModal ? 1 : 0, transition: "opacity 300ms ease" }}
+        style={{
+          opacity: showModal ? 1 : 0,
+          transition: "opacity 300ms ease",
+          pointerEvents: showModal ? "auto" : "none",
+        }}
       >
-        <Modal onClick={() => setShowModal(false)} />
+        <Modal
+          onClick={() => {
+            setShowModal(false);
+          }}
+        />
       </div>
       <div
         style={{
